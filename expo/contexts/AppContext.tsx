@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -17,11 +17,6 @@ import {
   selfImprovementLogs as initialSILogs,
   globalTickerItems as initialTickerItems,
   sectorCorrelations as initialCorrelations,
-  simulateGTRTick,
-  simulateExecutionTick,
-  simulateAnomalyTick,
-  simulateTickerItems,
-  simulateSectorCorrelations,
 } from '@/mocks/market';
 import {
   WatchlistStock,
@@ -39,6 +34,13 @@ import {
   GlobalTickerItem,
   SectorCorrelation,
 } from '@/types/market';
+import {
+  fetchBatchQuotesFinnhub,
+  fetchAlphaVantageQuote,
+  normalizeAlphaVantageQuote,
+  NormalizedQuote,
+  FINNHUB_SYMBOLS,
+} from '@/services/marketApi';
 
 export interface AppSettings {
   apiStatus: 'connected' | 'disconnected' | 'error';
@@ -53,8 +55,8 @@ export interface AppSettings {
 
 const defaultSettings: AppSettings = {
   apiStatus: 'connected',
-  dataSource: 'tushare',
-  refreshInterval: 5,
+  dataSource: 'finnhub+alphavantage',
+  refreshInterval: 15,
   pushNotifications: true,
   priceAlerts: true,
   indicatorAlerts: true,
@@ -62,28 +64,101 @@ const defaultSettings: AppSettings = {
   newsAlerts: true,
 };
 
-function simulateMarketIndices(items: MarketIndex[]): MarketIndex[] {
+const WATCHLIST_SYMBOL_MAP: Record<string, string> = {
+  'SPX': 'SPY',
+  'AAPL': 'AAPL',
+  'TSLA': 'TSLA',
+};
+
+const TICKER_SYMBOL_MAP: Record<string, string> = {
+  'QQQ': 'QQQ',
+  'SPY': 'SPY',
+  'DIA': 'DIA',
+  'IWM': 'IWM',
+};
+
+const INDEX_SYMBOL_MAP: Record<string, string> = {
+  'IXIC': 'QQQ',
+};
+
+function applyQuoteToWatchlist(
+  items: WatchlistStock[],
+  quotes: Map<string, NormalizedQuote>
+): WatchlistStock[] {
   return items.map((item) => {
-    const fluctuation = (Math.random() - 0.48) * item.value * 0.005;
+    const mappedSymbol = WATCHLIST_SYMBOL_MAP[item.code];
+    const quote = mappedSymbol ? quotes.get(mappedSymbol) : quotes.get(item.code);
+    if (!quote) return item;
     return {
       ...item,
-      value: Math.round((item.value + fluctuation) * 100) / 100,
-      change: Math.round(fluctuation * 100) / 100,
-      changePercent: Math.round((fluctuation / item.value) * 10000) / 100,
+      price: quote.price,
+      change: quote.change,
+      changePercent: quote.changePercent,
     };
   });
 }
 
-function simulateWatchlist(items: WatchlistStock[]): WatchlistStock[] {
+function applyQuoteToTicker(
+  items: GlobalTickerItem[],
+  quotes: Map<string, NormalizedQuote>
+): GlobalTickerItem[] {
   return items.map((item) => {
-    const fluctuation = (Math.random() - 0.48) * item.price * 0.005;
+    const mappedSymbol = TICKER_SYMBOL_MAP[item.code];
+    const quote = mappedSymbol ? quotes.get(mappedSymbol) : quotes.get(item.code);
+    if (!quote) return item;
     return {
       ...item,
-      price: Math.round((item.price + fluctuation) * 100) / 100,
-      change: Math.round(fluctuation * 100) / 100,
-      changePercent: Math.round((fluctuation / item.price) * 10000) / 100,
+      price: quote.price,
+      change: quote.change,
+      changePercent: quote.changePercent,
     };
   });
+}
+
+function applyQuoteToIndices(
+  items: MarketIndex[],
+  quotes: Map<string, NormalizedQuote>
+): MarketIndex[] {
+  return items.map((item) => {
+    const mappedSymbol = INDEX_SYMBOL_MAP[item.code];
+    const quote = mappedSymbol ? quotes.get(mappedSymbol) : quotes.get(item.code);
+    if (!quote) return item;
+    return {
+      ...item,
+      value: quote.price,
+      change: quote.change,
+      changePercent: quote.changePercent,
+    };
+  });
+}
+
+function getAllFetchableSymbols(
+  watchlist: WatchlistStock[],
+  ticker: GlobalTickerItem[],
+  indices: MarketIndex[]
+): string[] {
+  const symbols = new Set<string>();
+
+  watchlist.forEach((s) => {
+    const mapped = WATCHLIST_SYMBOL_MAP[s.code];
+    if (mapped) symbols.add(mapped);
+    else if ((FINNHUB_SYMBOLS as readonly string[]).includes(s.code)) symbols.add(s.code);
+  });
+
+  ticker.forEach((t) => {
+    const mapped = TICKER_SYMBOL_MAP[t.code];
+    if (mapped) symbols.add(mapped);
+    else if ((FINNHUB_SYMBOLS as readonly string[]).includes(t.code)) symbols.add(t.code);
+  });
+
+  indices.forEach((idx) => {
+    const mapped = INDEX_SYMBOL_MAP[idx.code];
+    if (mapped) symbols.add(mapped);
+  });
+
+  (FINNHUB_SYMBOLS as readonly string[]).forEach((s) => symbols.add(s));
+
+  return Array.from(symbols);
 }
 
 export const [AppProvider, useApp] = createContextHook(() => {
@@ -95,7 +170,7 @@ export const [AppProvider, useApp] = createContextHook(() => {
   const [portfolio, setPortfolio] = useState<PortfolioSummary>(initialPortfolio);
   const [marketIndices, setMarketIndices] = useState<MarketIndex[]>(initialIndices);
   const [fundFlows] = useState<FundFlow[]>(initialFundFlows);
-  const [sectors, setSectors] = useState<Sector[]>(initialSectors);
+  const [sectors] = useState<Sector[]>(initialSectors);
   const [factors] = useState<Factor[]>(initialFactors);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [isSubscribed, setIsSubscribed] = useState(false);
@@ -235,7 +310,7 @@ export const [AppProvider, useApp] = createContextHook(() => {
     setGtrAnomalies((prev) =>
       prev.map((a) => {
         if (a.id !== id) return a;
-        return { ...a, intercepted: true, actionTaken: '\u5df2\u624b\u52a8\u62e6\u622a\uff0c\u76f8\u5173\u7b56\u7565\u5df2\u6682\u505c' };
+        return { ...a, intercepted: true, actionTaken: '已手动拦截，相关策略已暂停' };
       })
     );
     console.log(`[GTR] Intercepted anomaly: ${id}`);
@@ -257,51 +332,112 @@ export const [AppProvider, useApp] = createContextHook(() => {
     console.log(`[GTR] Adjusted budget for ${id}: ${delta > 0 ? '+' : ''}${delta}%`);
   }, []);
 
-  const tickMarketData = useCallback(() => {
-    setMarketIndices((prev) => simulateMarketIndices(prev));
-    setWatchlist((prev) => simulateWatchlist(prev));
-    setSectors((prev) =>
-      prev.map((s) => ({
-        ...s,
-        changePercent:
-          Math.round((s.changePercent + (Math.random() - 0.48) * 0.3) * 100) / 100,
-      }))
-    );
-    setPortfolio((prev) => {
-      const dailyChange = Math.round((Math.random() - 0.4) * 5000 * 100) / 100;
-      return {
-        ...prev,
-        dailyPnL: dailyChange,
-        dailyPnLPercent: Math.round((dailyChange / prev.totalValue) * 10000) / 100,
-        totalValue: Math.round((prev.totalValue + dailyChange) * 100) / 100,
-      };
-    });
-    setGtrMappings((prev) => simulateGTRTick(prev));
-    setGtrExecutions((prev) => simulateExecutionTick(prev));
-    setGtrAnomalies((prev) => simulateAnomalyTick(prev));
-    setGlobalTicker((prev) => simulateTickerItems(prev));
-    setSectorCorrelations((prev) => simulateSectorCorrelations(prev));
-  }, []);
+  const marketQuotesQuery = useQuery({
+    queryKey: ['market-quotes-finnhub'],
+    queryFn: async () => {
+      const symbols = getAllFetchableSymbols(watchlist, globalTicker, marketIndices);
+      console.log(`[AppContext] Fetching ${symbols.length} symbols from Finnhub...`);
+      const quotes = await fetchBatchQuotesFinnhub(symbols);
+      return quotes;
+    },
+    refetchInterval: 15000,
+    staleTime: 10000,
+  });
 
-  const tickInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const alphaVantageQuery = useQuery({
+    queryKey: ['market-quotes-alphavantage'],
+    queryFn: async () => {
+      console.log('[AppContext] Fetching SPY from Alpha Vantage...');
+      const spyQuote = await fetchAlphaVantageQuote('SPY');
+      if (spyQuote) {
+        return normalizeAlphaVantageQuote(spyQuote);
+      }
+      return null;
+    },
+    refetchInterval: 60000,
+    staleTime: 55000,
+  });
 
   useEffect(() => {
-    tickInterval.current = setInterval(() => {
-      tickMarketData();
-      console.log('[AppContext] Real-time tick');
-    }, 3000);
-    return () => {
-      if (tickInterval.current) clearInterval(tickInterval.current);
-    };
-  }, [tickMarketData]);
+    const quotes = marketQuotesQuery.data;
+    if (!quotes || quotes.size === 0) return;
+
+    console.log(`[AppContext] Applying ${quotes.size} Finnhub quotes to state`);
+
+    setWatchlist((prev) => applyQuoteToWatchlist(prev, quotes));
+    setGlobalTicker((prev) => applyQuoteToTicker(prev, quotes));
+    setMarketIndices((prev) => applyQuoteToIndices(prev, quotes));
+
+    setPortfolio((prev) => {
+      const spyQuote = quotes.get('SPY');
+      if (spyQuote) {
+        const dailyChange = Math.round(spyQuote.changePercent * prev.totalValue / 100);
+        return {
+          ...prev,
+          dailyPnL: dailyChange,
+          dailyPnLPercent: spyQuote.changePercent,
+          totalValue: Math.round((prev.totalValue + dailyChange) * 100) / 100,
+        };
+      }
+      return prev;
+    });
+
+    setSectorCorrelations((prev) =>
+      prev.map((item) => {
+        const usQuote = quotes.get(item.usEtf);
+        if (!usQuote) return item;
+        const newUsChange = usQuote.changePercent;
+        const newDivergence = Math.round((newUsChange - item.cnChange) * 100) / 100;
+        let newSignal: SectorCorrelation['signal'] = item.signal;
+        if (Math.abs(newDivergence) < 1) newSignal = 'aligned';
+        else if (newDivergence > 3) newSignal = 'leading';
+        else if (newDivergence < -1) newSignal = 'lagging';
+        else newSignal = 'diverging';
+        return { ...item, usChange: newUsChange, divergence: newDivergence, signal: newSignal, correlation: Math.max(0.1, Math.min(0.99, item.correlation)) };
+      })
+    );
+
+    setGtrMappings((prev) =>
+      prev.map((m) => {
+        const usQuote = quotes.get(m.usCode);
+        if (!usQuote) return m;
+        return { ...m, usChange: usQuote.changePercent };
+      })
+    );
+
+    setSettings((prev) => {
+      if (prev.apiStatus !== 'connected') {
+        return { ...prev, apiStatus: 'connected' };
+      }
+      return prev;
+    });
+  }, [marketQuotesQuery.data]);
+
+  useEffect(() => {
+    const avQuote = alphaVantageQuery.data;
+    if (!avQuote) return;
+    console.log(`[AppContext] Alpha Vantage SPY data applied: price=${avQuote.price}`);
+  }, [alphaVantageQuery.data]);
+
+  useEffect(() => {
+    if (marketQuotesQuery.isError) {
+      console.log('[AppContext] Finnhub query error, marking API as error');
+      setSettings((prev) => ({ ...prev, apiStatus: 'error' }));
+    }
+  }, [marketQuotesQuery.isError]);
 
   const refreshMarketData = useCallback(async () => {
     setIsRefreshing(true);
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    tickMarketData();
-    setIsRefreshing(false);
-    console.log('[AppContext] Market data refreshed');
-  }, [tickMarketData]);
+    try {
+      await queryClient.invalidateQueries({ queryKey: ['market-quotes-finnhub'] });
+      await queryClient.invalidateQueries({ queryKey: ['market-quotes-alphavantage'] });
+      console.log('[AppContext] Market data refreshed via API');
+    } catch (err) {
+      console.log('[AppContext] Refresh error:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [queryClient]);
 
   return useMemo(() => ({
     watchlist,

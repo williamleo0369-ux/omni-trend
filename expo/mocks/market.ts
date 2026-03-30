@@ -578,55 +578,7 @@ export const selfImprovementLogs: SelfImprovementLog[] = [
   },
 ];
 
-export function simulateGTRTick(mappings: TrendMapping[]): TrendMapping[] {
-  return mappings.map((m) => {
-    if (m.status === 'expired') return m;
-    const changeDelta = (Math.random() - 0.45) * 0.5;
-    const volDelta = (Math.random() - 0.5) * 1.5;
-    const confDelta = (Math.random() - 0.5) * 2;
-    const newChange = Math.round((m.usChange + changeDelta) * 100) / 100;
-    const newVol = Math.max(5, Math.round((m.usVolatility + volDelta) * 10) / 10);
-    const newConf = Math.max(30, Math.min(99, Math.round(m.confidence + confDelta)));
-    let newStatus: TrendMapping['status'] = m.status;
-    if (newConf >= 90 && m.status === 'active') newStatus = 'triggered';
-    if (newConf < 60 && m.status === 'active') newStatus = 'expired';
-    return { ...m, usChange: newChange, usVolatility: newVol, confidence: newConf, status: newStatus };
-  });
-}
 
-export function simulateExecutionTick(strategies: ExecutionStrategy[]): ExecutionStrategy[] {
-  return strategies.map((s) => {
-    if (!s.enabled) return s;
-    const budgetDelta = (Math.random() - 0.5) * 2;
-    const certDelta = (Math.random() - 0.5) * 1.5;
-    return {
-      ...s,
-      budgetDelta: Math.round((s.budgetDelta + budgetDelta) * 10) / 10,
-      certainty: Math.max(30, Math.min(99, Math.round(s.certainty + certDelta))),
-    };
-  });
-}
-
-export function simulateAnomalyTick(alerts: AnomalyAlert[]): AnomalyAlert[] {
-  if (Math.random() > 0.95) {
-    const sectors: USSectorKey[] = ['technology', 'healthcare', 'financials', 'energy', 'semiconductor', 'crypto'];
-    const types: AnomalyAlert['type'][] = ['divergence', 'irrational', 'blackswan'];
-    const severities: AnomalyAlert['severity'][] = ['low', 'medium', 'high'];
-    const newAlert: AnomalyAlert = {
-      id: `aa-new-${Date.now()}`,
-      type: types[Math.floor(Math.random() * types.length)],
-      title: '新异常信号检测中...',
-      description: '系统正在验证跨市场信号一致性',
-      severity: severities[Math.floor(Math.random() * severities.length)],
-      anchorData: '数据验证中',
-      timestamp: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
-      intercepted: false,
-      sectorKey: sectors[Math.floor(Math.random() * sectors.length)],
-    };
-    return [newAlert, ...alerts.slice(0, 9)];
-  }
-  return alerts;
-}
 
 import { GlobalTickerItem, SectorCorrelation, GlobalAssetCategory } from '@/types/market';
 
@@ -726,36 +678,7 @@ export const globalAssetCategories: GlobalAssetCategory[] = [
   },
 ];
 
-export function simulateTickerItems(items: GlobalTickerItem[]): GlobalTickerItem[] {
-  return items.map((item) => {
-    const fluctuation = (Math.random() - 0.48) * item.price * 0.003;
-    const newPrice = Math.round((item.price + fluctuation) * 100) / 100;
-    return {
-      ...item,
-      price: newPrice,
-      change: Math.round(fluctuation * 100) / 100,
-      changePercent: Math.round((fluctuation / item.price) * 10000) / 100,
-    };
-  });
-}
 
-export function simulateSectorCorrelations(items: SectorCorrelation[]): SectorCorrelation[] {
-  return items.map((item) => {
-    const usDelta = (Math.random() - 0.48) * 0.4;
-    const cnDelta = (Math.random() - 0.48) * 0.4;
-    const newUsChange = Math.round((item.usChange + usDelta) * 100) / 100;
-    const newCnChange = Math.round((item.cnChange + cnDelta) * 100) / 100;
-    const newDivergence = Math.round((newUsChange - newCnChange) * 100) / 100;
-    const corrDelta = (Math.random() - 0.5) * 0.02;
-    const newCorrelation = Math.max(0.1, Math.min(0.99, Math.round((item.correlation + corrDelta) * 100) / 100));
-    let newSignal: SectorCorrelation['signal'] = item.signal;
-    if (Math.abs(newDivergence) < 1) newSignal = 'aligned';
-    else if (newDivergence > 3) newSignal = 'leading';
-    else if (newDivergence < -1) newSignal = 'lagging';
-    else newSignal = 'diverging';
-    return { ...item, usChange: newUsChange, cnChange: newCnChange, divergence: newDivergence, correlation: newCorrelation, signal: newSignal };
-  });
-}
 
 export function generateCandleData(days: number, basePrice: number): CandleData[] {
   const candles: CandleData[] = [];

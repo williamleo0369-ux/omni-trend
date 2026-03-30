@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Platform,
 } from 'react-native';
@@ -114,26 +114,11 @@ export default function ExploreScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [selectedCategory, setSelectedCategory] = useState('1');
-  const [liveCards, setLiveCards] = useState<MarketCard[]>(exploreMarketCards);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setLiveCards((prev) =>
-        prev.map((card) => {
-          const fluctuation = (Math.random() - 0.48) * card.price * 0.003;
-          const newPrice = Math.round((card.price + fluctuation) * 10000) / 10000;
-          const newChangePercent = Math.round((card.changePercent + (Math.random() - 0.48) * 0.1) * 100) / 100;
-          const newChartData = [...card.chartData.slice(1), newPrice / (card.price / 100)];
-          return { ...card, price: newPrice, changePercent: newChangePercent, chartData: newChartData };
-        })
-      );
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
+  const liveCards = useMemo(() => exploreMarketCards, []);
 
   const handleSearch = useCallback(() => {
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     router.push('/(tabs)/explore/search');
     console.log('[Explore] Navigate to search');
@@ -141,14 +126,14 @@ export default function ExploreScreen() {
 
   const handleCardPress = useCallback((card: MarketCard) => {
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     console.log(`[Explore] Card pressed: ${card.name}`);
   }, []);
 
   const handleQuickAction = useCallback((actionId: string) => {
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     switch (actionId) {
       case 'news':
@@ -211,7 +196,7 @@ export default function ExploreScreen() {
             onPress={() => {
               setSelectedCategory(cat.id);
               if (Platform.OS !== 'web') {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               }
             }}
           >
