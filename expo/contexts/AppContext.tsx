@@ -41,6 +41,7 @@ import {
   NormalizedQuote,
   FINNHUB_SYMBOLS,
 } from '@/services/marketApi';
+import { isUSMarketOpen, MarketStatus } from '@/components/MarketStatusBanner';
 
 export interface AppSettings {
   apiStatus: 'connected' | 'disconnected' | 'error';
@@ -175,6 +176,9 @@ export const [AppProvider, useApp] = createContextHook(() => {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [marketStatus, setMarketStatus] = useState<MarketStatus>(() => {
+    return isUSMarketOpen() ? 'loading' : 'closed';
+  });
 
   const [gtrMappings, setGtrMappings] = useState<TrendMapping[]>(initialMappings);
   const [gtrExecutions, setGtrExecutions] = useState<ExecutionStrategy[]>(initialExecStrategies);
@@ -411,6 +415,8 @@ export const [AppProvider, useApp] = createContextHook(() => {
       }
       return prev;
     });
+
+    setMarketStatus(isUSMarketOpen() ? 'open' : 'closed');
   }, [marketQuotesQuery.data]);
 
   useEffect(() => {
@@ -423,8 +429,19 @@ export const [AppProvider, useApp] = createContextHook(() => {
     if (marketQuotesQuery.isError) {
       console.log('[AppContext] Finnhub query error, marking API as error');
       setSettings((prev) => ({ ...prev, apiStatus: 'error' }));
+      setMarketStatus('error');
     }
   }, [marketQuotesQuery.isError]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (marketStatus !== 'error') {
+        const newStatus = isUSMarketOpen() ? 'open' : 'closed';
+        setMarketStatus(newStatus);
+      }
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [marketStatus]);
 
   const refreshMarketData = useCallback(async () => {
     setIsRefreshing(true);
@@ -471,6 +488,7 @@ export const [AppProvider, useApp] = createContextHook(() => {
     adjustBudgetRatio,
     globalTicker,
     sectorCorrelations,
+    marketStatus,
   }), [
     watchlist, strategies, alertsList, portfolio, marketIndices, fundFlows,
     sectors, factors, settings, isSubscribed, isRefreshing,
@@ -479,6 +497,6 @@ export const [AppProvider, useApp] = createContextHook(() => {
     updateSettings, subscribe, refreshMarketData,
     gtrMappings, gtrExecutions, gtrAnomalies, gtrSILogs,
     toggleGtrExecution, interceptAnomaly, dismissAnomaly, adjustBudgetRatio,
-    globalTicker, sectorCorrelations,
+    globalTicker, sectorCorrelations, marketStatus,
   ]);
 });

@@ -8,6 +8,7 @@ import { Pencil, Layers, MoreHorizontal, Search, X, ArrowUpRight, ArrowDownRight
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { useApp } from '@/contexts/AppContext';
+import MarketStatusBanner from '@/components/MarketStatusBanner';
 import { generateCandleData, etfStocks, watchlistStocks } from '@/mocks/market';
 import { CandleData, WatchlistStock } from '@/types/market';
 
@@ -302,7 +303,7 @@ function DrawingToolIcon({ type, size, color }: { type: DrawingTool['icon']; siz
 
 export default function ChartsScreen() {
   const insets = useSafeAreaInsets();
-  const { watchlist } = useApp();
+  const { watchlist, marketStatus, refreshMarketData } = useApp();
   const [selectedStock, setSelectedStock] = useState<WatchlistStock>(watchlist[0] || allSearchableStocks[0]);
   const [selectedTimeframe, setSelectedTimeframe] = useState('1天');
   const [showSearch, setShowSearch] = useState(false);
@@ -515,6 +516,7 @@ export default function ChartsScreen() {
       </View>
 
       <ScrollView style={styles.chartScroll} showsVerticalScrollIndicator={false}>
+        <MarketStatusBanner status={marketStatus} onRetry={refreshMarketData} />
         <CandlestickChart candles={candles} />
       </ScrollView>
 

@@ -7,6 +7,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Search, Newspaper, Calendar, UserCheck, ChevronRight } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
+import { useApp } from '@/contexts/AppContext';
+import MarketStatusBanner from '@/components/MarketStatusBanner';
 import { exploreCategories, exploreMarketCards, fullNewsItems } from '@/mocks/market';
 import { MarketCard, NewsItem } from '@/types/market';
 
@@ -113,6 +115,7 @@ function NewsRow({ item }: { item: NewsItem }) {
 export default function ExploreScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { marketStatus, refreshMarketData } = useApp();
   const [selectedCategory, setSelectedCategory] = useState('1');
   const liveCards = useMemo(() => exploreMarketCards, []);
 
@@ -167,6 +170,8 @@ export default function ExploreScreen() {
       </View>
 
       <Text style={styles.pageTitle}>探索</Text>
+
+      <MarketStatusBanner status={marketStatus} onRetry={refreshMarketData} />
 
       <View style={styles.quickActions}>
         {quickActions.map((action) => (

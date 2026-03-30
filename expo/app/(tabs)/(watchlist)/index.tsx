@@ -10,6 +10,7 @@ import Colors from '@/constants/colors';
 import { useApp } from '@/contexts/AppContext';
 import { WatchlistStock } from '@/types/market';
 import { TrendingUp, AlertTriangle, Globe, ChevronRight } from 'lucide-react-native';
+import MarketStatusBanner from '@/components/MarketStatusBanner';
 
 function TVLogo() {
   return (
@@ -86,7 +87,7 @@ interface SectionData {
 export default function WatchlistScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { watchlist, isRefreshing, refreshMarketData, gtrMappings, gtrAnomalies } = useApp();
+  const { watchlist, isRefreshing, refreshMarketData, gtrMappings, gtrAnomalies, marketStatus } = useApp();
 
   const activeSignals = useMemo(() =>
     gtrMappings.filter((m) => m.status === 'active' || m.status === 'triggered').length,
@@ -170,6 +171,8 @@ export default function WatchlistScreen() {
         stickySectionHeadersEnabled={false}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
+          <>
+          <MarketStatusBanner status={marketStatus} onRetry={refreshMarketData} />
           <Pressable
             style={({ pressed }) => [styles.gtrCard, pressed && styles.gtrCardPressed]}
             onPress={handleGTRPress}
@@ -203,6 +206,7 @@ export default function WatchlistScreen() {
               </View>
             </View>
           </Pressable>
+          </>
         }
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         refreshControl={
