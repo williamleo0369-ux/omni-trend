@@ -173,6 +173,8 @@ export default function SettingsScreen() {
         <Info size={14} color={Colors.textTertiary} />
         <Text style={styles.infoText}>数据源切换后，新数据将在下一次刷新时生效。</Text>
       </View>
+
+      <Text style={styles.attributionText}>Market data provided by Alpha Vantage and Finnhub</Text>
       <View style={{ height: 40 }} />
     </ScrollView>
   );
@@ -198,4 +200,5 @@ const styles = StyleSheet.create({
   switchLabel: { flex: 1, color: Colors.textPrimary, fontSize: 15, fontWeight: '500' as const },
   infoCard: { flexDirection: 'row', marginHorizontal: 16, marginTop: 14, backgroundColor: Colors.surface, borderRadius: 14, padding: 14, gap: 8 },
   infoText: { flex: 1, color: Colors.textTertiary, fontSize: 12, lineHeight: 18 },
+  attributionText: { textAlign: 'center' as const, color: Colors.textMuted, fontSize: 11, marginTop: 20, marginHorizontal: 16 },
 });
