@@ -1,12 +1,13 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Platform, Switch, Alert,
+  Modal, TextInput, KeyboardAvoidingView,
 } from 'react-native';
 import { Stack } from 'expo-router';
 import {
   Wifi, WifiOff, Database, Clock, Bell, BellOff,
   TrendingUp, AlertTriangle, Wallet, Newspaper,
-  Trash2, Info,
+  Trash2, Info, UserX, X,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
@@ -17,7 +18,49 @@ const REFRESH_INTERVALS = [3, 5, 10, 30, 60] as const;
 
 export default function SettingsScreen() {
   const { settings, updateSettings } = useApp();
-  const [testingApi, setTestingApi] = useState(false);
+  const [testingApi, setTestingApi] = useState<boolean>(false);
+  const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
+  const [confirmText, setConfirmText] = useState<string>('');
+  const [deleting, setDeleting] = useState<boolean>(false);
+
+  const handleOpenDeleteAccount = useCallback(() => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    setConfirmText('');
+    setShowDeleteModal(true);
+  }, []);
+
+  const handleCloseDeleteModal = useCallback(() => {
+    if (deleting) return;
+    setShowDeleteModal(false);
+    setConfirmText('');
+  }, [deleting]);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (confirmText.trim() !== 'DELETE') {
+      Alert.alert('确认失败', '请输入 DELETE 以确认删除账号');
+      return;
+    }
+    setDeleting(true);
+    if (Platform.OS !== 'web') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    }
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      setShowDeleteModal(false);
+      setConfirmText('');
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+      Alert.alert('账号已删除', '您的账号和所有相关数据已被永久删除。');
+    } catch (error) {
+      console.error('[DeleteAccount] failed', error);
+      Alert.alert('删除失败', '请稍后重试或联系客服。');
+    } finally {
+      setDeleting(false);
+    }
+  }, [confirmText]);
 
   const handleTestApi = useCallback(async () => {
     setTestingApi(true);
@@ -169,6 +212,26 @@ export default function SettingsScreen() {
         </Pressable>
       </View>
 
+      <View style={styles.sectionCard}>
+        <Text style={styles.sectionLabel}>账号</Text>
+        <Pressable
+          style={styles.settingRow}
+          onPress={handleOpenDeleteAccount}
+          testID="delete-account-button"
+        >
+          <View style={[styles.settingIcon, { backgroundColor: Colors.redDim }]}>
+            <UserX size={16} color={Colors.red} />
+          </View>
+          <View style={styles.settingInfo}>
+            <Text style={[styles.settingTitle, { color: Colors.red }]}>删除账号</Text>
+            <Text style={styles.settingValue}>永久删除账号及所有数据</Text>
+          </View>
+        </Pressable>
+        <Text style={styles.sectionFooter}>
+          删除账号将永久移除您的所有数据,此操作不可撤销。
+        </Text>
+      </View>
+
       <View style={styles.infoCard}>
         <Info size={14} color={Colors.textTertiary} />
         <Text style={styles.infoText}>数据源切换后，新数据将在下一次刷新时生效。</Text>
@@ -176,6 +239,80 @@ export default function SettingsScreen() {
 
       <Text style={styles.attributionText}>Market data provided by Alpha Vantage and Finnhub</Text>
       <View style={{ height: 40 }} />
+
+      <Modal
+        visible={showDeleteModal}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCloseDeleteModal}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalBackdrop}
+        >
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={[styles.settingIcon, { backgroundColor: Colors.redDim }]}>
+                <AlertTriangle size={18} color={Colors.red} />
+              </View>
+              <Text style={styles.modalTitle}>确认删除账号</Text>
+              <Pressable
+                onPress={handleCloseDeleteModal}
+                hitSlop={12}
+                disabled={deleting}
+                testID="delete-account-close"
+              >
+                <X size={20} color={Colors.textMuted} />
+              </Pressable>
+            </View>
+            <Text style={styles.modalMessage}>
+              此操作将永久删除您的账号和所有相关数据,包括:
+            </Text>
+            <View style={styles.bulletList}>
+              <Text style={styles.bulletItem}>• 个人资料</Text>
+              <Text style={styles.bulletItem}>• 自选股与收藏</Text>
+              <Text style={styles.bulletItem}>• 预警与提醒设置</Text>
+            </View>
+            <Text style={styles.modalWarning}>此操作不可撤销。</Text>
+            <Text style={styles.modalLabel}>请输入 DELETE 确认</Text>
+            <TextInput
+              value={confirmText}
+              onChangeText={setConfirmText}
+              placeholder="DELETE"
+              placeholderTextColor={Colors.textMuted}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              editable={!deleting}
+              style={styles.modalInput}
+              testID="delete-account-input"
+            />
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.modalButton, styles.modalCancel]}
+                onPress={handleCloseDeleteModal}
+                disabled={deleting}
+                testID="delete-account-cancel"
+              >
+                <Text style={styles.modalCancelText}>取消</Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.modalButton,
+                  styles.modalDelete,
+                  (confirmText.trim() !== 'DELETE' || deleting) && styles.modalDeleteDisabled,
+                ]}
+                onPress={handleConfirmDelete}
+                disabled={confirmText.trim() !== 'DELETE' || deleting}
+                testID="delete-account-confirm"
+              >
+                <Text style={styles.modalDeleteText}>
+                  {deleting ? '删除中...' : '永久删除'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </ScrollView>
   );
 }
@@ -201,4 +338,22 @@ const styles = StyleSheet.create({
   infoCard: { flexDirection: 'row', marginHorizontal: 16, marginTop: 14, backgroundColor: Colors.surface, borderRadius: 14, padding: 14, gap: 8 },
   infoText: { flex: 1, color: Colors.textTertiary, fontSize: 12, lineHeight: 18 },
   attributionText: { textAlign: 'center' as const, color: Colors.textMuted, fontSize: 11, marginTop: 20, marginHorizontal: 16 },
+  sectionFooter: { color: Colors.textTertiary, fontSize: 11, lineHeight: 16, paddingHorizontal: 14, paddingTop: 6, paddingBottom: 12 },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalCard: { width: '100%', maxWidth: 420, backgroundColor: Colors.card, borderRadius: 20, padding: 20, gap: 10 },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 4 },
+  modalTitle: { flex: 1, color: Colors.textPrimary, fontSize: 17, fontWeight: '700' as const },
+  modalMessage: { color: Colors.textSecondary, fontSize: 14, lineHeight: 20 },
+  bulletList: { gap: 4, paddingLeft: 4 },
+  bulletItem: { color: Colors.textTertiary, fontSize: 13, lineHeight: 19 },
+  modalWarning: { color: Colors.red, fontSize: 13, fontWeight: '600' as const, marginTop: 4 },
+  modalLabel: { color: Colors.textTertiary, fontSize: 12, fontWeight: '600' as const, marginTop: 8, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
+  modalInput: { backgroundColor: Colors.surface, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, color: Colors.textPrimary, fontSize: 15, fontWeight: '600' as const, letterSpacing: 1.5, borderWidth: 1, borderColor: Colors.divider },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  modalButton: { flex: 1, paddingVertical: 13, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  modalCancel: { backgroundColor: Colors.surface },
+  modalCancelText: { color: Colors.textPrimary, fontSize: 15, fontWeight: '600' as const },
+  modalDelete: { backgroundColor: Colors.red },
+  modalDeleteDisabled: { opacity: 0.45 },
+  modalDeleteText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' as const },
 });
