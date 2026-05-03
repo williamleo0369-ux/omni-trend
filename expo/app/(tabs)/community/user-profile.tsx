@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, Platform, Animated,
+  View, Text, StyleSheet, ScrollView, Pressable, Platform, Animated, ActionSheetIOS, Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { ArrowLeft, MoreHorizontal, Heart, MessageCircle, TrendingUp, TrendingDown, ExternalLink } from 'lucide-react-native';
@@ -151,6 +151,39 @@ export default function UserProfileScreen() {
     return p.author === userMap[userId ?? ''];
   });
 
+  const handleMore = useCallback(() => {
+    if (Platform.OS !== 'web') {
+      void Haptics.selectionAsync();
+    }
+    const options = ['屏蔽', '举报', '分享', '取消'];
+    const handle = (index: number) => {
+      if (index === 0) console.log('[Profile] Block user', userId);
+      else if (index === 1) console.log('[Profile] Report user', userId);
+      else if (index === 2) console.log('[Profile] Share user', userId);
+    };
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options, destructiveButtonIndex: 1, cancelButtonIndex: 3 },
+        handle,
+      );
+    } else {
+      Alert.alert('更多操作', undefined, [
+        { text: '屏蔽', onPress: () => handle(0) },
+        { text: '举报', style: 'destructive', onPress: () => handle(1) },
+        { text: '分享', onPress: () => handle(2) },
+        { text: '取消', style: 'cancel' },
+      ]);
+    }
+  }, [userId]);
+
+  const handleMessage = useCallback(() => {
+    if (Platform.OS !== 'web') {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    console.log('[Profile] Open message with user', userId);
+    Alert.alert('私信功能', '私信功能即将上线，敬请期待。');
+  }, [userId]);
+
   const handleFollow = useCallback(() => {
     if (Platform.OS !== 'web') {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -189,7 +222,7 @@ export default function UserProfileScreen() {
             </Pressable>
           ),
           headerRight: () => (
-            <Pressable hitSlop={12} style={styles.headerMoreBtn}>
+            <Pressable hitSlop={12} style={styles.headerMoreBtn} onPress={handleMore}>
               <MoreHorizontal size={22} color={Colors.textPrimary} />
             </Pressable>
           ),
@@ -227,7 +260,7 @@ export default function UserProfileScreen() {
               </Text>
             </Pressable>
           </Animated.View>
-          <Pressable style={styles.messageBtn}>
+          <Pressable style={styles.messageBtn} onPress={handleMessage}>
             <Text style={styles.messageBtnText}>消息</Text>
           </Pressable>
         </View>
