@@ -4,13 +4,13 @@ import Purchases, { LOG_LEVEL } from 'react-native-purchases';
 export const PRO_ENTITLEMENT_ID = 'pro';
 
 function getRCToken(): string | undefined {
-  if (__DEV__ || Platform.OS === 'web') {
-    return process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY;
+  if (Platform.OS === 'web') {
+    return undefined;
   }
   return Platform.select({
     ios: process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY,
     android: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY,
-    default: process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY,
+    default: undefined,
   });
 }
 
@@ -18,6 +18,10 @@ let configured = false;
 
 export function configureRevenueCat(): void {
   if (configured) return;
+  if (Platform.OS === 'web') {
+    console.log('[RevenueCat] Skipping configuration on web');
+    return;
+  }
   const apiKey = getRCToken();
   if (!apiKey) {
     console.log('[RevenueCat] Missing API key for platform', Platform.OS);
