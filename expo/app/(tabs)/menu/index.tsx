@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, Pressable, Platform, Alert, Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import Purchases from 'react-native-purchases';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   MessageSquare, Settings, Crown, ChevronRight, Star,
@@ -17,6 +18,7 @@ export default function MenuScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isSubscribed, subscribe, alertsList } = useApp();
+  void subscribe;
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const unreadAlerts = alertsList.filter((a) => !a.isRead).length;
 
@@ -34,25 +36,26 @@ export default function MenuScreen() {
       return;
     }
 
-    Alert.alert(
-      '开通 Pro 会员',
-      '30天免费试用，之后 ¥198/年\n\n包含：\n• 全部量化策略\n• AI 无限对话\n• 实时预警推送\n• 专属数据源',
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '开始免费试用',
-          onPress: () => {
-            subscribe();
-            if (Platform.OS !== 'web') {
-              void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            }
-            Alert.alert('订阅成功', '恭喜！您已成功开通Pro会员，30天免费试用已激活');
-            console.log('[Menu] Subscription activated');
-          },
-        },
-      ]
-    );
-  }, [isSubscribed, subscribe, scaleAnim]);
+    router.push('/paywall');
+    console.log('[Menu] Open paywall');
+  }, [isSubscribed, scaleAnim, router]);
+
+  const handleRestore = useCallback(async () => {
+    try {
+      const info = await Purchases.restorePurchases();
+      const isPro = info.entitlements.active['pro'] !== undefined;
+      if (isPro) {
+        subscribe();
+        Alert.alert('恢复成功', '已恢复您的 Pro 会员');
+      } else {
+        Alert.alert('未发现可恢复的订阅', '当前账号下没有有效的 Pro 订阅');
+      }
+    } catch (err) {
+      const e = err as { message?: string };
+      console.log('[Menu] Restore error:', e?.message);
+      Alert.alert('恢复失败', e?.message ?? '请稍后重试');
+    }
+  }, [subscribe]);
 
   const handleSettings = useCallback(() => {
     router.push('/(tabs)/menu/settings');
@@ -213,7 +216,7 @@ export default function MenuScreen() {
           <Text style={styles.menuLabel}>帮助中心</Text>
         </Pressable>
         <View style={styles.menuDivider} />
-        <Pressable style={styles.menuRow} onPress={() => Alert.alert('恢复购买', '正在恢复您之前的购买记录...')}>
+        <Pressable style={styles.menuRow} onPress={handleRestore}>
           <CreditCard size={20} color={Colors.textSecondary} />
           <Text style={styles.menuLabel}>恢复购买</Text>
         </Pressable>
