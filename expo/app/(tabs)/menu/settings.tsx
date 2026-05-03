@@ -10,14 +10,17 @@ import {
   Trash2, Info, UserX, X,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useApp } from '@/contexts/AppContext';
+import { deleteAccount as deleteAccountApi } from '@/services/accountApi';
 
 const DATA_SOURCES = ['tushare', 'akshare', 'eastmoney', 'sina'] as const;
 const REFRESH_INTERVALS = [3, 5, 10, 30, 60] as const;
 
 export default function SettingsScreen() {
   const { settings, updateSettings } = useApp();
+  const router = useRouter();
   const [testingApi, setTestingApi] = useState<boolean>(false);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
   const [confirmText, setConfirmText] = useState<string>('');
@@ -47,20 +50,27 @@ export default function SettingsScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     }
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await deleteAccountApi();
       setShowDeleteModal(false);
       setConfirmText('');
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-      Alert.alert('账号已删除', '您的账号和所有相关数据已被永久删除。');
+      Alert.alert('账号已删除', '您的账号和所有相关数据已被永久删除。', [
+        {
+          text: '好的',
+          onPress: () => {
+            router.replace('/');
+          },
+        },
+      ]);
     } catch (error) {
       console.error('[DeleteAccount] failed', error);
       Alert.alert('删除失败', '请稍后重试或联系客服。');
     } finally {
       setDeleting(false);
     }
-  }, [confirmText]);
+  }, [confirmText, router]);
 
   const handleTestApi = useCallback(async () => {
     setTestingApi(true);
